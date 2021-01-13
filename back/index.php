@@ -14,7 +14,11 @@ $app = AppFactory::create();
 
 function  addHeaders (Response $response) : Response {
     $response = $response
-    ->withHeader("Content-Type", "application/json");
+    ->withHeader("Content-Type", "application/json")
+    ->withHeader('Access-Control-Allow-Origin', '*')
+    ->withHeader('Access-Control-Allow-Headers', 'Content-Type,  Authorization')
+    ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
+    ->withHeader('Access-Control-Expose-Headers', 'Authorization');
 
     return $response;
 }
@@ -37,25 +41,6 @@ function createJwt (Response $response) : Response {
 
 const JWT_SECRET = "MET02-CNAM-HEBINGER";
 
-// API Nécessitant un Jwt valide
-$app->get('/auth/{login}', function (Request $request, Response $response, $args) {
-    global $entityManager;
-
-    $login = $args['login'];
-
-    $utilisateurRepository = $entityManager->getRepository('Utilisateur');
-    $utilisateur = $utilisateurRepository->findOneBy(array('login' => $login));
-    if ($utilisateur) {
-        $data = array('nom' => $utilisateur->getNom(), 'prenom' => $utilisateur->getPrenom());
-        $response = addHeaders ($response);
-        $response = createJwT ($response);
-        $response->getBody()->write(json_encode($data));
-    } else {
-        $response = $response->withStatus(401);
-    }
-
-    return $response;
-});
 
 // API Nécessitant un Jwt valide
 $app->post('/register', function (Request $request, Response $response, $args) {
@@ -75,7 +60,12 @@ $app->post('/register', function (Request $request, Response $response, $args) {
     $mail = $body ['mail'] ?? "";
     $civilite = $body ['civilite'] ?? "";
 
-
+    if(!preg_match('/[a-zA-Z0-9]{1,20}/',$nom) || !preg_match('/[a-zA-Z0-9]{1,20}/',$prenom) || !preg_match('/[a-zA-Z0-9]{1,20}/',$ville) || !preg_match('/[a-zA-Z0-9]{1,20}/',$pays)|| !preg_match('/[a-zA-Z0-9]{1,20}/',$civilite)){
+      $err = true;
+    }
+    if(!preg_match('/[a-zA-Z0-9]{1,20}/',$login) || !preg_match('/[a-zA-Z0-9]{1,20}/',$pass)){
+      $err = true;
+    }
 
     if (!$err) {
 
@@ -84,6 +74,7 @@ $app->post('/register', function (Request $request, Response $response, $args) {
         //existe deja ?
         if($utilisateur and $login == $utilisateur->getLogin()){
             $response->getBody()->write(json_encode($body));
+			$response = addHeaders ($response);
             $response = $response->withStatus(401);
         }else{
 
@@ -103,11 +94,13 @@ $app->post('/register', function (Request $request, Response $response, $args) {
             $entityManager->persist($client);
             $entityManager->flush();
 
+			$response = addHeaders ($response);
             $response->getBody()->write(json_encode($body));
         }
 
     }else {
         $response->getBody()->write(json_encode($body));
+		$response = addHeaders ($response);
         $response = $response->withStatus(400);
     }
 
@@ -123,17 +116,15 @@ $app->post('/login', function (Request $request, Response $response, $args) {
     $login = $body ['login'] ?? "";
     $pass = $body ['pass'] ?? "";
 
-    if (!preg_match("/[a-zA-Z0-9]{1,20}/",$login))   {
-        $err = true;
+    if(!preg_match('/[a-zA-Z0-9]{1,20}/',$login) || !preg_match('/[a-zA-Z0-9]{1,20}/',$pass)){
+      $err = true;
     }
-    if (!preg_match("/[a-zA-Z0-9]{1,20}/",$pass))  {
-        $err=true;
-    }
+
+
     if (!$err) {
         $utilisateurRepository = $entityManager->getRepository('Utilisateur');
         $utilisateur = $utilisateurRepository->findOneBy(array('login' => $login, 'password' => $pass));
         if ($utilisateur and $login == $utilisateur->getLogin() and $pass == $utilisateur->getPassword()) {
-            $response = addHeaders ($response);
             $response = createJwT ($response);
             $data = array(
               'nom' => $utilisateur->getNom(),
@@ -146,14 +137,16 @@ $app->post('/login', function (Request $request, Response $response, $args) {
               'civilite' => $utilisateur->getCivilite()
             );
 
-
+			$response = addHeaders ($response);
             $response->getBody()->write(json_encode($data));
         } else {
             $response->getBody()->write(json_encode($body));
+			$response = addHeaders ($response);
             $response = $response->withStatus(401);
         }
     } else {
         $response->getBody()->write(json_encode($body));
+		$response = addHeaders ($response);
         $response = $response->withStatus(400);
     }
 
@@ -168,6 +161,7 @@ $app->get('/all', function (Request $request, Response $response, $args) {
     $utilisateurRepository = $entityManager->getRepository('Utilisateur');
     $utilisateur = $utilisateurRepository->findAll();
 
+	$response = addHeaders ($response);
     $response->getBody()->write(json_encode($utilisateur));
 
     return $response;
@@ -183,6 +177,7 @@ $app->add(new Tuupola\Middleware\JwtAuthentication([
     "algorithm" => ["HS256"],
     "error" => function ($response, $arguments) {
         $data = array('ERREUR' => 'ERREUR', 'ERREUR' => 'Auth Needed !');
+		$response = addHeaders ($response);
         return $response->withHeader("Content-Type", "application/json")->getBody()->write(json_encode($data));
     }
 
